@@ -82,6 +82,9 @@ function _nazarov_aperture(a::Array, psi::Array, cortege::Array{Int})
         aper /= max_val
         return aper
     end
+    # the standard case. Note that this scaling is not the same used in the proof,
+    # as the one used in the proof is a conservative one for theoretical soundness,
+    # and we can improve upon it in code.
     for i=1:vn
         aper[i] = (aper[i]-min_val)/(max_val-min_val)
     end
@@ -337,7 +340,6 @@ function plot_nazarov_const(n1::Integer, n2::Integer)
     plot(x, [nazarov_const(i) for i in x])
 end
 
-
 function dft_mat(n::Integer)
     mat = zeros(n,n)
     q = 2*pi/n
@@ -358,105 +360,4 @@ function dft_mat(n::Integer)
         mat[h_pt,:] /= sqrt(2)
     end
     return mat
-end
-
-# sets up globals for a given n, right now fft plan
-function create_ctx(n::Integer)
-    return plan_fft(zeros(n))
-end
-
-# as mathematicians, it is natural to use l_q norms to quantify flatness
-function test_bool(M::Integer, pr::Real=0.5, q::Real=1.5)
-    if q > 2
-        warn("q < 2 is really the only interesting case!")
-    end
-
-    # first, do the primes
-    # try to sieve to get the desired pr, this works asymptotically by
-    # Mertens theorem
-    beta = 0.1
-    low = M
-    high = round(Int, M*(1+beta))
-    mask = ones(Int, length(low:high))
-    # first, compute the low primes and sieve them
-    eulergamma = 0.5772156649015329
-    low_prime = round(Int,M^(pr*exp(-eulergamma)))
-    primes_mask = [isprime(i) for i in 1:low_prime]
-    for p=1:low_prime
-        if primes_mask[p]
-            m = p*div(low,p)
-            if (m < low)
-                m += p
-            end
-            if (m == p)
-                m += p
-            end
-            while m <= high
-                mask[m-low+1] = 0
-                m += p
-            end
-        end
-    end
-
-    # now mark the actual primes
-    for n=low:high
-        if isprime(n)
-            mask[n-low+1] = 2
-        end
-    end
-
-    # finally generate the bit pattern
-    n = countnz(mask)
-    scale_factor = sqrt(n*pr*(1-pr))
-    ctx = create_ctx(n)
-    a_prime = zeros(n)
-    count = 1
-    for e in mask
-        if e==0
-            continue
-        else
-            if e==2
-                a_prime[count] = 1
-            end
-            count += 1
-        end
-    end
-
-    aphat = ctx * a_prime
-    abs_aphat = abs.(aphat/scale_factor)
-    phat_cdf = ecdf(abs_aphat)
-
-    # Now study random patterns
-    p = pr
-    a_rnd = zeros(n)
-    true_nz = countnz(a_prime)
-    phat = true_nz/n
-    println("Target p: $p")
-    println("Actual p: $phat")
-    println("Random pattern will be generated according to the target p")
-    println("(M,N,p)        : ($M,$n,$p)")
-
-    pd = Bernoulli(p)
-    rand!(pd, a_rnd)
-    arhat = ctx * a_rnd
-    abs_arhat = abs.(arhat/scale_factor)
-    rhat_cdf = ecdf(abs_arhat)
-
-    limit_cdf = x -> 1-exp(-x^2)
-
-    x = range(0, length=255, stop=3)
-    cdf_phat = [phat_cdf(i) for i in x]
-    cdf_rhat = [rhat_cdf(i) for i in x]
-    cdf_limit = [limit_cdf(i) for i in x]
-    M_str = @sprintf("%.3e", M)
-    n_str = @sprintf("%.3e", n)
-    p = plot(x, [cdf_phat, cdf_rhat, cdf_limit],
-             title="Prime pseudorandomness\n (M,beta,N,p)=($M_str,$beta,$n_str,$p)",
-             label=["primes", "bernoulli", "limit"],
-             lw=1,
-             xlabel="x",
-             ylabel="F(x)")
-    plot_str="/tmp/prime_prn.pdf"
-    savefig(p, plot_str)
-    println("max cdf diff: $(max(maximum(abs.(cdf_phat-cdf_limit)),maximum(abs.(cdf_rhat-cdf_limit))))")
 end

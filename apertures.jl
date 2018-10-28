@@ -206,9 +206,6 @@ function nazarov_ahat(n::Integer, powers::Array, ctx::FFTW.cFFTWPlan)
     ahat = ctx * aperture
     ahat = [abs(x) for x in ahat]
     rho = ahat[1]/n
-    min_spec = minimum(ahat)
-    loss_factor = n*rho*(1-rho)/(min_spec*min_spec)
-    println("loss factor (Nazarov): $loss_factor")
     println("rho (Nazarov): $rho")
     return ahat
 end
@@ -229,6 +226,16 @@ end
 
 function iid_corr(theta::Real, n::Integer)
     return (theta/n)*ones(n)
+end
+
+function char_corr(theta::Real, beta::Real, n::Integer)
+    f = x -> (x < beta || (x > 1-beta)) ? theta : 0
+    d = (1/n)*ones(n)
+    for i=1:n
+        j = i-1
+        d[i] *= f(j/n)
+    end
+    return d
 end
 
 """
@@ -281,7 +288,7 @@ function eval_mmse_rand(d::Array, rho::Real, n::Integer, t::Real, w::Real, j::Re
         mmse = 0
         for i=1:n
             r = abs(ahat[i])
-            mmse += 1/((1/d[1])+gamma*r*r)
+            mmse += 1/((1/d[i])+gamma*r*r)
         end
         mmse_arr[i] = mmse
     end
@@ -346,8 +353,8 @@ function mmse_lb(d::Array, rho::Real, n::Integer, t::Real, w::Real, j::Real)
     p = n*n*rho*rho
     mmse += 1/((1/d[1])+gamma*p)
     for i=2:n
-        p = max(0, (c-(1/d[i]))/gamma)
-        mmse += 1/((1/d[i])+gamma*p)
+        p = max(0, (c-(1/d[i])))
+        mmse += 1/((1/d[i])+p)
     end
     return mmse
 end
@@ -361,7 +368,7 @@ a pdf plot at /tmp/mmse_iid.pdf. This is the top plot of the paper.
 a pdf plot at /tmp/mmse_exp.pdf. This is the bottom plot of the paper.
 """
 function plot_lmmse(n::Integer, theta::Real, beta::Real, w::Real, j::Real, start::Real=0, len::Real=4)
-    d = exp_corr(theta, beta, n)
+    d = char_corr(theta, beta, n)
     fft_ctx = plan_fft(zeros(n))
     waterfill = zeros(n-1)
     x = range(start, length=256, stop=len)
@@ -384,7 +391,7 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, w::Real, j::Real, start
         y_prng[i] = 10*log10(Optim.minimum(res))
         # spectrally flat, rho in rho_arr
         y_spec[i] = 10*log10(minimum([eval_mmse_flat(d,rho,n,t,w,j) for rho in rho_arr]))
-        # Nazarov construction (iid case only, FIXME)
+        # Nazarov construction
         ahat_nazarov = nazarov_ahat(n, waterfill, fft_ctx)
         y_nazarov[i] = 10*log10(eval_mmse(d,n,t,w,j,ahat_nazarov))
         i += 1

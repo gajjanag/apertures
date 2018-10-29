@@ -177,7 +177,8 @@ function _nazarov_aperture(a::Array, psi::Array, cortege::Array{Int})
     end
     # the standard case. Note that this scaling is not the same used in the proof,
     # as the one used in the proof is a conservative one for theoretical soundness,
-    # and we can improve upon it in code.
+    # and we can improve upon it in code. Note that this scaling does not guarantee
+    # \rho <= 0.5, though it is very close to it.
     for i=1:vn
         aper[i] = (aper[i]-min_val)/(max_val-min_val)
     end
@@ -339,7 +340,7 @@ end
 function eval_mmse_rand(d::Array, rho::Real, n::Integer, t::Real, w::Real, j::Real, ctx::FFTW.cFFTWPlan)
     a = zeros(n)
     pd = Bernoulli(rho)
-    ntr = round(Int, 400)
+    ntr = round(Int, 400) # 400 is arbitrary, larger will make plot smoother
     mmse_arr = zeros(ntr)
     gamma = t/(n*(w+rho*j))
     for i=1:ntr
@@ -405,6 +406,10 @@ Lower bound on LMMSE based on waterfilling.
 """
 function mmse_lb(d::Array, rho::Real, n::Integer, t::Real, w::Real, j::Real)
     gamma = t/(n*(w+rho*j))
+    # A hack for t=0
+    if (gamma == 0)
+        return sum(d)
+    end
     r = n*rho
     p = n*(floor(r)+frac(r)*frac(r))-r*r
     ub = (1/d[1])+gamma*p
@@ -420,12 +425,27 @@ function mmse_lb(d::Array, rho::Real, n::Integer, t::Real, w::Real, j::Real)
 end
 
 """
+Read the values of n for which we have spectrally flat constructions from
+data/ into a dictionary of n->rho_arr[n].
+"""
+function get_spec_flat()
+    fdict = Dict("data/1_2_vals.txt" => 0.5, "data/1_4_vals.txt" => 0.25, "data/1_8_vals.txt" => 0.125)
+    spec_flat_dict = Dict{Int64,Array{Float64,1}}()
+    for (file, rho) in fdict
+        for line in eachline(file)
+            n = parse(Int64, line)
+            if !haskey(spec_flat_dict, n)
+                spec_flat_dict[n] = [rho]
+            else
+                push!(spec_flat_dict[n], rho)
+            end
+        end
+    end
+    return spec_flat_dict
+end
+
+"""
 Finally, the function that generates the plots of the paper.
-Set n=251, theta=1, w=j=0.001, start = 0, len=10.
-1. iid: Set beta = 1, and call plot_lmmse(n,theta,beta,w,j,start,len) to get
-a pdf plot at /tmp/mmse_iid.pdf. This is the top plot of the paper.
-2. exp: Set beta = 0.1, and call plot_lmmse(n,theta,beta,w,j,start,len) to get
-a pdf plot at /tmp/mmse_exp.pdf. This is the bottom plot of the paper.
 """
 function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j::Real, start::Real=0, len::Real=4)
     d = char_corr(theta, beta, gamma, n)
@@ -437,7 +457,12 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j
     y_prng = zeros(length(x))
     y_spec = zeros(length(x))
     y_nazarov = zeros(length(x))
-    rho_arr = [0.25] # depends on the value of n that we use, this is for n=251
+    spec_flat_dict = get_spec_flat()
+    if !haskey(spec_flat_dict, n)
+        error("No spectrally flat construction available at n=$n")
+    else
+        rho_arr = spec_flat_dict[n]
+    end
     i = 1
     @showprogress for t in x
         t *= n
@@ -460,10 +485,7 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j
              label=["lower bound", "optimal random on-off", "spectrally flat", "Nazarov"],
              xlabel="exposure time (divided by n)",
              ylabel="LMMSE (dB)")
-    plot_str = "/tmp/mmse_iid.pdf"
-    if (beta != 1 || gamma != 1)
-        plot_str = "/tmp/mmse_exp.pdf"
-    end
+    plot_str = "/tmp/mmse.pdf"
     savefig(p, plot_str)
     q = plot(x, popt,
              title="optimal p vs time for iid scene at\n (n,theta,w,j)=($n,$theta,$w,$j)",

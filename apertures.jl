@@ -445,13 +445,20 @@ function get_spec_flat()
 end
 
 """
-Finally, the function that generates the plots of the paper.
+Finally, the function that generates the plots of the paper, saved in "/tmp/mmse.pdf".
+Specifically, set globally:
+julia> n=677, theta=1, w=0.001, j=0.001, start=0, stop=10, res=256;
+
+For plot (a), do:
+julia> beta = 1, gamma=0; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
+For plot (b), do:
+julia> beta = 0.02, gamma=0.005; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
 """
-function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j::Real, start::Real=0, len::Real=4)
+function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j::Real, start::Real=0, len::Real=10, res=256)
     d = char_corr(theta, beta, gamma, n)
     fft_ctx = plan_fft(zeros(n))
     waterfill = zeros(n-1)
-    x = range(start, length=32, stop=len)
+    x = range(start, length=res, stop=len)
     y_lb = zeros(length(x))
     popt = zeros(length(x))
     y_prng = zeros(length(x))

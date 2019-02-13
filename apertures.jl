@@ -7,6 +7,7 @@ using Random
 using LinearAlgebra
 using ProgressMeter
 using Primes
+using LaTeXStrings
 
 """
 Nazarov's ``magic'' Phi function x*arctan(x)-(1/2)log(1+x*x)
@@ -125,6 +126,7 @@ function nazarov_search!(a::Array, psi::Array, cortege::Array{Int})
     fv = sum([cortege[j]*a[j]*psi[j,:] for j=1:n])
     cur_pot = nazarov_potential(fv)
     iter = 0
+    eval_ct = 1
     is_opt = false
     println("-----------------------------------------------------------------")
     println("Performing local optimum search...")
@@ -137,6 +139,7 @@ function nazarov_search!(a::Array, psi::Array, cortege::Array{Int})
         for j in iter_order
             fv -= 2*cortege[j]*a[j]*psi[j,:]
             new_pot = nazarov_potential(fv)
+            eval_ct += 1
             if new_pot > cur_pot
                 is_opt = false
                 cur_pot = new_pot
@@ -146,6 +149,8 @@ function nazarov_search!(a::Array, psi::Array, cortege::Array{Int})
             fv += 2*cortege[j]*a[j]*psi[j,:]
         end
     end
+    println("\n---------------------------------------------------------------")
+    println("Function evaluations (scaled by n^2): $(eval_ct/(n*n))")
     println("\n---------------------------------------------------------------")
 end
 
@@ -447,10 +452,10 @@ end
 """
 Finally, the function that generates the plots of the paper, saved in "/tmp/mmse.pdf".
 Specifically, set globally:
-julia> n=677, theta=1, w=0.001, j=0.001, start=0, stop=10, res=256;
+julia> n=677; theta=1; w=0.001; j=0.001; start=-50; stop=50; res=256;
 
 For plot (a), do:
-julia> beta = 1, gamma=0; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
+julia> beta = 1; gamma=0; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
 For plot (b), do:
 julia> beta = 0.02, gamma=0.005; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
 """
@@ -472,6 +477,8 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j
     end
     i = 1
     @showprogress for t in x
+        t /= 10
+        t = 10^t
         t *= n
         # lower bound
         res = Optim.optimize(rho->mmse_lb(d,rho,n,t,w,j), 0, 1)
@@ -488,16 +495,19 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j
         y_nazarov[i] = 10*log10(eval_mmse(d,n,t,w,j,ahat_nazarov))
         i += 1
     end
-    p = plot(x, [y_lb, y_prng, y_spec, y_nazarov],
-             label=["lower bound", "optimal random on-off", "spectrally flat", "Nazarov"],
-             xlabel="exposure time (divided by n)",
+    # force pyplot, GR has issues with LaTeX labels
+    pyplot()
+    xlabel_str = L"10\log_{10}(t/n)"
+    p = plot(x, [y_lb y_prng y_spec y_nazarov],
+             label=["lower bound" "optimal random on-off" "spectrally flat" "Nazarov"],
+             xlabel=xlabel_str,
              ylabel="LMMSE (dB)")
     plot_str = "/tmp/mmse.pdf"
     savefig(p, plot_str)
     q = plot(x, popt,
              title="optimal p vs time for iid scene at\n (n,theta,w,j)=($n,$theta,$w,$j)",
              label="optimal p",
-             xlabel="exposure time (divided by n)",
+             xlabel=xlabel_str,
              ylabel="p")
     plot_str = "/tmp/optp_iid.pdf"
     savefig(q, plot_str)

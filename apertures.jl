@@ -1,5 +1,6 @@
 using FFTW
 using Plots
+using PGFPlots # MUST do this to avoid world age issue!
 using Roots
 using Optim
 using Distributions
@@ -457,7 +458,7 @@ julia> n=677; theta=1; w=0.001; j=0.001; start=-50; stop=50; res=256;
 For plot (a), do:
 julia> beta = 1; gamma=0; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
 For plot (b), do:
-julia> beta = 0.02, gamma=0.005; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
+julia> beta = 0.02; gamma=0.005; plot_lmmse(n,theta,beta,gamma,w,j,start,stop,res);
 """
 function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j::Real, start::Real=0, len::Real=10, res=256)
     d = char_corr(theta, beta, gamma, n)
@@ -495,20 +496,20 @@ function plot_lmmse(n::Integer, theta::Real, beta::Real, gamma::Real, w::Real, j
         y_nazarov[i] = 10*log10(eval_mmse(d,n,t,w,j,ahat_nazarov))
         i += 1
     end
-    # force pyplot, GR has issues with LaTeX labels
-    pyplot()
+    # force pgfplots, GR has issues with LaTeX labels
+    pgfplots()
     xlabel_str = L"10\log_{10}(t/n)"
-    p = plot(x, [y_lb y_prng y_spec y_nazarov],
+    p = Plots.plot(x, [y_lb y_prng y_spec y_nazarov],
              label=["lower bound" "optimal random on-off" "spectrally flat" "Nazarov"],
              xlabel=xlabel_str,
              ylabel="LMMSE (dB)")
-    plot_str = "/tmp/mmse.pdf"
+    plot_str = "/tmp/mmse.tex"
     savefig(p, plot_str)
-    q = plot(x, popt,
+    q = Plots.plot(x, popt,
              title="optimal p vs time for iid scene at\n (n,theta,w,j)=($n,$theta,$w,$j)",
              label="optimal p",
              xlabel=xlabel_str,
              ylabel="p")
-    plot_str = "/tmp/optp_iid.pdf"
+    plot_str = "/tmp/optp_iid.tex"
     savefig(q, plot_str)
 end
